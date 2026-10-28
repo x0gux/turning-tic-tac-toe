@@ -22,5 +22,37 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* 온라인 대전: 두 수마다 판이 스윙하며 회전하는 애니메이션 */
+@keyframes board-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(var(--spin-deg, 90deg));
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-board-spin {
+  animation: board-spin 0.85s cubic-bezier(0.5, 0, 0.3, 1) both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.3s ease-out;
 }
