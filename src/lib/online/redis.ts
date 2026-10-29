@@ -268,21 +268,34 @@ export function createRedisBus(client: Redis): Bus {
   };
 }
 
-/** Vercel Marketplace Redis 등의 접속 정보로 클라이언트를 만든다 */
-export function createRedisClient(): Redis {
-  const url =
-    process.env.REDIS_URL ??
-    process.env.REDIS_TCP_URL ??
-    process.env.KV_REDIS_URL ??
-    process.env.STORAGE_URL;
+/** ioredis(TCP)로 접속할 수 있는 URL만 골라낸다. REST(https) URL은 제외 */
+function pickRedisUrl(): string {
+  const candidates = [
+    "REDIS_URL",
+    "REDIS_TCP_URL",
+    "KV_REDIS_URL",
+    "STORAGE_URL",
+  ];
+  let restOnly: string | null = null;
 
-  if (!url) {
-    throw new Error(
-      "REDIS_URL 환경변수가 없어요. Vercel Marketplace에서 Redis(Upstash)를 추가하면 자동으로 주입돼요.",
-    );
+  for (const name of candidates) {
+    const value = process.env[name];
+    if (!value) continue;
+    if (/^rediss?:\/\//i.test(value)) return value;
+    restOnly ??= `${name}은(는) https:// REST 주소라서 웹소켓 서버가 쓰는 TCP 클라이언트(ioredis)와 호환되지 않아요`;
   }
 
-  return new Redis(url, {
+  const hint = restOnly
+    ? ` (${restOnly} — Upstash 콘솔에서 rediss://로 시작하는 연결 문자열을 REDIS_URL에 넣어주세요)`
+    : "";
+  throw new Error(
+    `TCP 접속용 REDIS_URL 환경변수가 없어요. Vercel Marketplace에서 Redis(Upstash)를 추가하면 자동으로 주입돼요.${hint}`,
+  );
+}
+
+/** Vercel Marketplace Redis 등의 접속 정보로 클라이언트를 만든다 */
+export function createRedisClient(): Redis {
+  return new Redis(pickRedisUrl(), {
     connectTimeout: 10_000,
     maxRetriesPerRequest: 3,
   });
