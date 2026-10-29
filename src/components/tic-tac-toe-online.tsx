@@ -40,7 +40,7 @@ export default function TicTacToeOnline() {
 
   /* --------------------------- 로비 (방 만들기/참여) --------------------------- */
 
-  if (game.phase !== "in-room") {
+  if (game.phase !== "in-room" && game.phase !== "reconnecting") {
     const connecting = game.phase === "connecting";
     return (
       <section className="flex w-full max-w-md flex-col items-center gap-7 rounded-3xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:p-8">
@@ -131,7 +131,8 @@ export default function TicTacToeOnline() {
   const opponentMark: Player | null = you === "X" ? "O" : you === "O" ? "X" : null;
   const isMyTurn =
     state.status === "playing" && you !== null && state.current === you;
-  const canPlay = isMyTurn && state.connected[you];
+  const canPlay =
+    isMyTurn && state.connected[you] && game.phase === "in-room";
 
   /* ------------------------------ 대기 화면 ------------------------------ */
 
@@ -168,6 +169,8 @@ export default function TicTacToeOnline() {
         <p className="animate-pulse text-sm font-medium text-zinc-500 dark:text-zinc-400">
           친구를 기다리는 중…
         </p>
+
+        {game.phase === "reconnecting" && <ReconnectingBanner />}
 
         <p className="text-center text-xs leading-5 text-zinc-400">
           친구에게 4자리 코드를 알려주세요.
@@ -224,7 +227,9 @@ export default function TicTacToeOnline() {
       </div>
 
       <div className="flex h-6 items-center justify-center gap-2 text-center">
-        {rotationToast ? (
+        {game.phase === "reconnecting" ? (
+          <ReconnectingBanner />
+        ) : rotationToast ? (
           <p className="animate-fade-up text-sm font-semibold text-amber-600 dark:text-amber-400">
             {rotationToast}
           </p>
@@ -474,6 +479,17 @@ function PlayerBadge({
 function playerLabel(you: Player | null, mark: Player): string {
   if (you === null) return `플레이어 ${mark}`;
   return you === mark ? "나" : "상대";
+}
+
+function ReconnectingBanner() {
+  return (
+    <p
+      className="animate-pulse text-xs font-medium text-amber-600 dark:text-amber-400"
+      role="status"
+    >
+      연결이 잠시 끊겨 자동으로 다시 접속하는 중…
+    </p>
+  );
 }
 
 function getStatusText(

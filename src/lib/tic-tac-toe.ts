@@ -148,11 +148,13 @@ export type OnlineEvent =
 export type ClientMessage =
   | { type: "create" }
   | { type: "join"; code: string }
+  | { type: "resume"; code: string; token: string }
   | { type: "move"; index: number }
-  | { type: "rematch" };
+  | { type: "rematch" }
+  | { type: "leave" };
 
 export type ServerMessage =
-  | { type: "welcome"; code: string; you: Player | null }
+  | { type: "welcome"; code: string; you: Player | null; token: string | null }
   | { type: "state"; event: OnlineEvent | null; state: OnlineState; you: Player | null }
   | { type: "notice"; text: string }
   | { type: "error"; message: string };
