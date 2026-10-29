@@ -294,6 +294,23 @@ function cellPosition(index: number): string {
   return `translate(${(index % 3) * 100}%, ${Math.floor(index / 3) * 100}%)`;
 }
 
+/** 회전 스윙(말이 판을 타고 도는 구간)과 중력 낙하 소요 시간(ms) */
+const SWING_MS = 520;
+const FALL_MS = 820;
+
+type SpinPhase = "swing" | "snap" | "fall";
+
+/**
+ * mid(회전 직후) 칸을 반대로 회전시켜 회전 전 칸을 되찾는다.
+ * dir = 1:  old (a, b) → mid (b, 2 - a)  →  old = (2 - c, r)
+ * dir = -1: old (a, b) → mid (2 - b, a)  →  old = (c, 2 - r)
+ */
+function unrotateIndex(index: number, dir: -1 | 1): number {
+  const r = Math.floor(index / 3);
+  const c = index % 3;
+  return dir === 1 ? (2 - c) * 3 + r : c * 3 + (2 - r);
+}
+
 function RotatingBoard({
   board,
   midBoard,
@@ -311,30 +328,75 @@ function RotatingBoard({
   spin: SpinEvent | null;
   onPlay: (index: number) => void;
 }) {
-  // 회전 직후에는 중력 적용 전(mid) 위치에 말을 보여주고, 이후 낙하시킨다.
-  const [falling, setFalling] = useState(false);
+  // 말 레이어를 판 중심을 축으로 실제 90° 회전시키면 각 말이 제자리를 기억한 채
+  // 회전 방향의 원호를 타고 이동한다.
+  //   swing: 레이어가 0 → ±90° 회전 (말들은 제자리)
+  //   snap:  레이어를 0으로 되돌리는 대신 말들을 mid 칸에 얹는다 (같은 화면 위치)
+  //   fall:  mid 칸에서 중력으로 낙하
+  const [anim, setAnim] = useState<{
+    seq: number;
+    dir: -1 | 1;
+    phase: SpinPhase;
+  } | null>(null);
+  const active = anim && spin && anim.seq === spin.seq ? anim : null;
 
   useEffect(() => {
     if (!spin || !midBoard) {
-      setFalling(false);
+      setAnim(null);
       return;
     }
-    setFalling(true);
-    const timer = window.setTimeout(() => setFalling(false), 900);
-    return () => window.clearTimeout(timer);
+    const { seq, dir } = spin;
+
+    setAnim({ seq, dir, phase: "swing" });
+
+    let settleRaf = 0;
+    const snapTimer = window.setTimeout(() => {
+      setAnim({ seq, dir, phase: "snap" });
+      // 스냅이 화면에 반영된 뒤 중력 낙하로 넘어간다
+      requestAnimationFrame(() => {
+        settleRaf = requestAnimationFrame(() => {
+          setAnim((current) =>
+            current && current.seq === seq && current.phase === "snap"
+              ? { ...current, phase: "fall" }
+              : current,
+          );
+        });
+      });
+    }, SWING_MS + 40);
+
+    const endTimer = window.setTimeout(() => {
+      setAnim((current) => (current && current.seq === seq ? null : current));
+    }, SWING_MS + 40 + FALL_MS + 60);
+
+    return () => {
+      window.clearTimeout(snapTimer);
+      window.clearTimeout(endTimer);
+      cancelAnimationFrame(settleRaf);
+    };
   }, [spin, midBoard]);
 
   const marks = board.flatMap((cell, index) =>
     cell ? [{ ...cell, index }] : [],
   );
 
+  // 각 말이 지금 그려져야 할 칸
   const displayIndex = (mark: { id: string; index: number }): number => {
-    if (falling && midBoard) {
+    if (active && midBoard) {
       const mid = midBoard.findIndex((cell) => cell?.id === mark.id);
-      if (mid !== -1) return mid;
+      if (mid !== -1) {
+        if (active.phase === "swing") return unrotateIndex(mid, active.dir);
+        if (active.phase === "snap") return mid;
+      }
     }
     return mark.index;
   };
+
+  const swinging = active?.phase === "swing";
+  const falling = active?.phase === "fall";
+  const swingStyle =
+    active?.phase === "swing"
+      ? ({ "--spin-deg": `${active.dir * 90}deg` } as CSSProperties)
+      : undefined;
 
   return (
     <div
@@ -342,15 +404,11 @@ function RotatingBoard({
       aria-label="틱택토 보드"
       className="relative mx-auto aspect-square w-full max-w-80"
     >
-      {/* 칸 레이어: 회전 이벤트마다 통째로 스윙하며 돈다 */}
+      {/* 칸 레이어: 회전 방향으로 살짝 기울었다 복귀한다 */}
       <div
-        key={spin ? `spin-${spin.seq}` : "static"}
-        className={`absolute inset-0 ${spin ? "animate-board-spin" : ""}`}
-        style={
-          spin
-            ? ({ "--spin-deg": `${spin.dir * 90}deg` } as CSSProperties)
-            : undefined
-        }
+        key={active?.phase === "swing" ? `tilt-${active.seq}` : "static"}
+        className={`absolute inset-0 ${swinging ? "animate-cell-tilt" : ""}`}
+        style={swingStyle}
       >
         {board.map((cell, index) => (
           <div
@@ -379,8 +437,14 @@ function RotatingBoard({
         ))}
       </div>
 
-      {/* 말 레이어: 회전 후 새 위치로 미끄러진다 */}
-      <div className="pointer-events-none absolute inset-0">
+      {/* 말 레이어: 판 중심을 축으로 도는 원호를 타고 이동한 뒤 떨어진다 */}
+      <div
+        key={active?.phase === "swing" ? `swing-${active.seq}` : "marks"}
+        className={`pointer-events-none absolute inset-0 ${
+          swinging ? "animate-mark-swing" : ""
+        }`}
+        style={swingStyle}
+      >
         {marks.map((mark) => {
           const isWinner =
             result?.type === "win" && result.line.includes(mark.index);
@@ -392,8 +456,8 @@ function RotatingBoard({
               style={{
                 transform: cellPosition(displayIndex(mark)),
                 transition: falling
-                  ? "transform 850ms cubic-bezier(0.3, 1.1, 0.5, 1)"
-                  : "transform 620ms cubic-bezier(0.34, 1.35, 0.64, 1)",
+                  ? `transform ${FALL_MS}ms cubic-bezier(0.3, 1.1, 0.5, 1)`
+                  : undefined,
               }}
             >
               <span

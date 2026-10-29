@@ -25,21 +25,44 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/* 온라인 대전: 두 수마다 판이 스윙하며 회전하는 애니메이션 */
-@keyframes board-spin {
+/* 온라인 대전: 말들이 판 회전을 타고 중심 주위를 도는 스윙.
+   살짝 관성으로 넘어갔다(72%) 정확히 90°에 안착한다. */
+@keyframes mark-swing {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  }
+  72% {
+    transform: rotate(calc(var(--spin-deg, 90deg) * 1.045));
+    animation-timing-function: cubic-bezier(0.3, 0, 0.35, 1);
+  }
+  100% {
+    transform: rotate(var(--spin-deg, 90deg));
+  }
+}
+
+.animate-mark-swing {
+  transform-origin: center;
+  animation: mark-swing 0.52s both;
+  will-change: transform;
+}
+
+/* 칸 레이어는 회전 방향으로 살짝 기울었다 되돌아온다 (판이 반응하는 느낌) */
+@keyframes cell-tilt {
   0% {
     transform: rotate(0deg);
   }
   40% {
-    transform: rotate(var(--spin-deg, 90deg));
+    transform: rotate(calc(var(--spin-deg, 90deg) * 0.055));
   }
   100% {
     transform: rotate(0deg);
   }
 }
 
-.animate-board-spin {
-  animation: board-spin 0.85s cubic-bezier(0.5, 0, 0.3, 1) both;
+.animate-cell-tilt {
+  transform-origin: center;
+  animation: cell-tilt 0.52s cubic-bezier(0.4, 0, 0.3, 1);
 }
 
 @keyframes fade-up {
